@@ -1,34 +1,41 @@
-const { app, BrowserWindow, ipcMain } = require('electron/main')
-const path = require('node:path')
-const createWindow = () => {
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+const duckdb = require('duckdb');
+
+let db;
+
+function createWindow() {
   const win = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 900,
+    height: 700,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      // contextIsolation: true, // Enable context isolation
-      // enableRemoteModule: false, // Disable remote module
-      // nodeIntegration: false // Disable Node.js integration in renderer process
-    }
-  })
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
 
-  win.loadFile('index.html')
+  win.loadFile('index.html');
 }
 
 app.whenReady().then(() => {
-  ipcMain.handle('ping', () => 'pong') // Handle ping requests from renderer process
-  createWindow()
+  // 初始化 DuckDB 数据库
+  db = new duckdb.Database(':memory:');
+  createWindow();
+});
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      console.log("No windows open, creating a new one.") 
-      createWindow()
-    }
-  })
-})
+ipcMain.handle('sql-query', async (event, sql) => {
+  return new Promise((resolve, reject) => {
+    db.all(sql, (err, rows) => {
+      if (err) {
+        resolve({ error: err.message });
+      } else {
+        resolve({ rows });
+      }
+    });
+  });
+});
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
+  if (process.platform !== 'darwin') app.quit();
+});
